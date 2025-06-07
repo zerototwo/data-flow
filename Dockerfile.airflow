@@ -1,0 +1,18 @@
+FROM apache/airflow:2.9.1-python3.12
+
+USER root
+
+# 安装必要工具和依赖包（根据你的项目需求可选）
+RUN apt-get update && \
+    apt-get install -y build-essential curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# 设置默认工作目录
+WORKDIR /opt/airflow
+
+# 安装项目依赖
+COPY requirements.txt /opt/airflow/requirements.txt
+RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt

@@ -1,4 +1,5 @@
-version: '3.7'
+version: "3.8"
+
 services:
   mysql:
     image: mysql:8
@@ -26,12 +27,16 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+      - "19092:19092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:19092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     volumes:
       - kafka_data:/var/lib/kafka/data
 
@@ -57,7 +62,9 @@ services:
       - "5601:5601"
 
   airflow-init:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     depends_on:
       - mysql
     environment:
@@ -68,9 +75,14 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
     command: bash -c "airflow db init"
     user: "0"
+    volumes:
+      - /Users/lupeipei/PycharmProjects/data-flow/dags:/opt/airflow/dags
+      - /Users/lupeipei/PycharmProjects/data-flow/requirements.txt:/opt/airflow/requirements.txt
 
   airflow-webserver:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     depends_on:
       - mysql
       - airflow-init
@@ -81,12 +93,19 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ''
     ports:
       - "8080:8080"
-    command: webserver
+    command: bash -c "pip install --no-cache-dir -r /opt/airflow/requirements.txt && airflow webserver"
     volumes:
-      - ./tmp/airflow/dags:/opt/airflow/dags
+      - /Users/lupeipei/PycharmProjects/data-flow/dags:/opt/airflow/dags
+      - /Users/lupeipei/PycharmProjects/data-flow/producers:/opt/airflow/producers
+      - /Users/lupeipei/PycharmProjects/data-flow/spark_jobs:/opt/airflow/spark_jobs
+      - /Users/lupeipei/PycharmProjects/data-flow/consumers:/opt/airflow/consumers
+      - /Users/lupeipei/PycharmProjects/data-flow/requirements.txt:/opt/airflow/requirements.txt
+      - /Users/lupeipei/PycharmProjects/data-flow/logs:/opt/airflow/logs
 
   airflow-scheduler:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     depends_on:
       - mysql
       - airflow-init
@@ -94,9 +113,14 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://airflow:airflow@mysql:3306/airflow
       AIRFLOW__CORE__FERNET_KEY: ''
-    command: scheduler
+    command: bash -c "pip install --no-cache-dir -r /opt/airflow/requirements.txt && airflow scheduler"
     volumes:
-      - ./tmp/airflow/dags:/opt/airflow/dags
+      - /Users/lupeipei/PycharmProjects/data-flow/dags:/opt/airflow/dags
+      - /Users/lupeipei/PycharmProjects/data-flow/producers:/opt/airflow/producers
+      - /Users/lupeipei/PycharmProjects/data-flow/spark_jobs:/opt/airflow/spark_jobs
+      - /Users/lupeipei/PycharmProjects/data-flow/consumers:/opt/airflow/consumers
+      - /Users/lupeipei/PycharmProjects/data-flow/requirements.txt:/opt/airflow/requirements.txt
+      - /Users/lupeipei/PycharmProjects/data-flow/logs:/opt/airflow/logs
 
 volumes:
   mysql_data:

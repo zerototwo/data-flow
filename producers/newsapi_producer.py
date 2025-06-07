@@ -1,31 +1,42 @@
 import requests
 import json
 from kafka import KafkaProducer
-import time
 
-API_KEY = "85a882471feb42be92692ca46a2f3a01"
+API_KEY = "45a41e33d32d4a4d91e4182e45e437f7"
 TOPIC = "raw_news"
-BROKER = "localhost:9092"
+BROKER = "kafka:9092"
 
-producer = KafkaProducer(bootstrap_servers=[BROKER], value_serializer=lambda x: json.dumps(x).encode())
+producer = KafkaProducer(
+    bootstrap_servers=[BROKER],
+    value_serializer=lambda x: json.dumps(x).encode()
+)
 
 def fetch_news():
-    url = f"https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey={API_KEY}"
-    resp = requests.get(url)
-    articles = resp.json().get("articles", [])
-    for art in articles:
-        record = {
-            "title": art.get("title"),
-            "publishedAt": art.get("publishedAt"),
-            "description": art.get("description"),
-            "source": art.get("source", {}).get("name"),
-            "url": art.get("url")
-        }
-        producer.send(TOPIC, record)
+    url = f"https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={API_KEY}"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        articles = data.get("articles", [])
+    except Exception as e:
+        print(f"Failed to fetch news data: {e}")
+        return
+
+    count = 0
+    for article in articles:
+        try:
+            record = {
+                "title": article["title"],
+                "publishedAt": article["publishedAt"],
+                "source": article["source"]["name"],
+                "description": article["description"]
+            }
+            producer.send(TOPIC, record)
+            count += 1
+        except Exception as e:
+            print(f"Failed to send record to Kafka: {e}")
     producer.flush()
+    print(f"Produced {count} news records to topic {TOPIC}.")
 
 if __name__ == "__main__":
-    while True:
-        fetch_news()
-        print("News data produced.")
-        time.sleep(180)  # 每3分钟采一次
+    fetch_news()

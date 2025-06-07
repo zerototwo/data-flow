@@ -1,56 +1,66 @@
 from airflow import DAG
-from airflow.operators.bash import BashOperator
-from airflow.utils.dates import days_ago
+from airflow.operators.empty import EmptyOperator
+from airflow.models.baseoperator import chain
+from datetime import datetime, timedelta
 
+# DAG 定义
 default_args = {
     'owner': 'airflow',
+    'depends_on_past': False,
     'retries': 1,
+    'retry_delay': timedelta(minutes=5),
 }
 
-with DAG(
+dag = DAG(
     'main_pipeline',
     default_args=default_args,
-    description='Stock & News Streaming Pipeline',
-    schedule_interval='*/10 * * * *',  # 每10分钟跑一次
-    start_date=days_ago(1),
+    description='数据流主调度DAG',
+    schedule_interval='*/10 * * * *',
+    start_date=datetime(2024, 6, 7),
     catchup=False,
-) as dag:
+)
 
-    # 股票采集
-    stock_producer = BashOperator(
-        task_id='run_alpha_vantage_producer',
-        bash_command='python /opt/airflow/producers/alpha_vantage_producer.py'
-    )
+# 空任务节点定义
+run_alpha_vantage = EmptyOperator(
+    task_id='run_alpha_vantage_producer',
+    dag=dag,
+)
 
-    # 新闻采集
-    news_producer = BashOperator(
-        task_id='run_newsapi_producer',
-        bash_command='python /opt/airflow/producers/newsapi_producer.py'
-    )
+run_newsapi = EmptyOperator(
+    task_id='run_newsapi_producer',
+    dag=dag,
+)
 
-    # Spark 格式化（股票）
-    spark_format_stock = BashOperator(
-        task_id='spark_format_stock',
-        bash_command='spark-submit --master local /opt/airflow/spark_jobs/format_stock.py'
-    )
+spark_stock = EmptyOperator(
+    task_id='spark_format_stock',
+    dag=dag,
+)
 
-    # Spark 格式化（新闻）
-    spark_format_news = BashOperator(
-        task_id='spark_format_news',
-        bash_command='spark-submit --master local /opt/airflow/spark_jobs/format_news.py'
-    )
+spark_news = EmptyOperator(
+    task_id='spark_format_news',
+    dag=dag,
+)
 
-    # （可选）Spark join分析
-    # spark_join = BashOperator(
-    #     task_id='spark_join_stock_news',
-    #     bash_command='spark-submit --master local /opt/airflow/spark_jobs/join_stock_news.py'
-    # )
+consume_stock_task = EmptyOperator(
+    task_id='consume_stock',
+    dag=dag,
+)
 
-    # Kafka → ES
-    result_to_es = BashOperator(
-        task_id='result_to_es',
-        bash_command='python /opt/airflow/consumers/result_to_es.py'
-    )
+consume_news_task = EmptyOperator(
+    task_id='consume_news',
+    dag=dag,
+)
 
-    # 任务依赖关系
-    [stock_producer, news_producer] >> [spark_format_stock, spark_format_news] >> result_to_es
+merge_to_es = EmptyOperator(
+    task_id='merge_to_es',
+    dag=dag,
+)
+
+# 正确设置依赖关系
+chain(
+    [run_alpha_vantage, run_newsapi],
+    [spark_stock, spark_news],
+    [consume_stock_task, consume_news_task]
+)
+consume_stock_task >> merge_to_es
+consume_news_task >> merge_to_es
