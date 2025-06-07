@@ -14,7 +14,7 @@ default_args = {
 dag = DAG(
     'main_pipeline',
     default_args=default_args,
-    description='数据流主调度DAG',
+    description='DAG',
     schedule_interval='*/10 * * * *',
     start_date=datetime(2024, 6, 7),
     catchup=False,
