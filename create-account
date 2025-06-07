@@ -1,0 +1,9 @@
+docker exec -it data-flow-airflow-webserver-1 bash
+
+airflow users create \
+  --username admin \
+  --password admin \
+  --firstname Admin \
+  --lastname User \
+  --role Admin \
+  --email admin@example.com
