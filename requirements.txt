@@ -1,0 +1,6 @@
+pyspark>=3.0.0
+kafka-python
+requests
+elasticsearch>=8.0.0
+apache-airflow==2.9.1
+pandas  # 仅本地调试用
